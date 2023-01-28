@@ -2,13 +2,14 @@
   "name": "upwork-alerts",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "bot.js",
   "scripts": {
     "test": "node ."
   },
   "author": "RUSHWAYC",
   "dependencies": {
     "discord.js": "^14.7.1",
+    "dotenv": "^16.0.3",
     "puppeteer": "^19.6.2",
     "puppeteer-extra": "^3.3.4",
     "puppeteer-extra-plugin-stealth": "^2.11.1"
