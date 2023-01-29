@@ -3,25 +3,32 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
 });
 
+const fs = require("fs").promises;
 const puppeteer = require("puppeteer");
 
-client.on("ready", () => {
+client.on("ready", async () => {
   console.log("I am ready!");
 
-  let previous_content = [];
-  let new_content = [];
+  let previousJobPost = null;
 
-  async function scrape() {
-    //Puppeteer code.
+  async function scrapeJobAds() {
     const browser = await puppeteer.launch({ headless: true });
     const page = await browser.newPage();
     await page.setUserAgent(
       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.75 Safari/537.36"
     );
+
+    //load cookies
+    const cookiesString = await fs.readFile("./cookies.json");
+    const cookies = JSON.parse(cookiesString);
+    await page.setCookie(...cookies);
+
     await page.goto(
-      "https://www.upwork.com/nx/jobs/search/?q=customer%20support&t=0&contractor_tier=3&hourly_rate=15-&from_recent_search=true&sort=recency"
+      "https://www.upwork.com/nx/jobs/search/?q=customer%20support&t=0&contractor_tier=2,3&hourly_rate=15-&from_recent_search=true&sort=recency"
     );
-    await page.waitForTimeout(5000);
+
+    await page.waitForSelector(".up-card-list-section");
+
     const jobPosts = await page.evaluate(() =>
       Array.from(
         document.getElementsByClassName("up-card-list-section"),
@@ -30,51 +37,70 @@ client.on("ready", () => {
           hourly: e.querySelector(".mb-10 strong").innerText,
           description: e.querySelector(".mt-10 span").innerText,
           link: e.querySelector(".my-10 a").href,
+          posted: e.querySelector(
+            ".mb-10 > div:nth-child(1) > small > span:nth-child(4) > span > span"
+          ).innerText,
         })
       )
     );
 
     await browser.close();
-    //Puppeteer code end.
 
-    jobPosts.forEach(function (jobPosts) {
-      let content = jobPosts;
-      new_content.push(content);
+    function convertToMinutes(post) {
+      const timeUnits = {
+        minutes: 1,
+        hour: 60,
+        hours: 60,
+        day: 1440,
+        days: 1440,
+      };
+
+      const postUnit = Object.keys(timeUnits).find((unit) =>
+        post.includes(unit + " ago")
+      );
+      return parseInt(post.split(" ")[0], 10) * timeUnits[postUnit];
+    }
+
+    const newJobPost = jobPosts.reduce((acc, curr) => {
+      if (!acc) {
+        return curr;
+      }
+
+      const accMinutes = convertToMinutes(acc.posted);
+      const currMinutes = convertToMinutes(curr.posted);
+      return accMinutes < currMinutes ? acc : curr;
     });
 
-    function compareArrays(a, b) {
-      // If length is not equal
-      if (a.length != b.length) return "False";
-      else {
-        // Comparing each element of array
-        for (var i = 0; i < a.length; i++) if (a[i] != b[i]) return "False";
-        return "True";
-      }
-    }
-    let compareResults = compareArrays(previous_content, new_content);
-
-    if (previous_content.length == 0) {
-      previous_content = new_content;
-      console.log("Previous content is empty.");
+    if (previousJobPost === null) {
+      console.log("previousJobPost is null, adding newJobPost");
+      previousJobPost = newJobPost.title;
+    } else if (previousJobPost !== newJobPost.title) {
+      console.log("New job found:", newJobPost.title);
+      previousJobPost = newJobPost.title;
     } else {
-      if (!compareResults) {
-        console.log("New job found!");
-        client.users.fetch("181195607887708161", false).then((user) => {
-          user.send(
-            `------------------------\n*New job post found!*\n\n**Title**: ${jobPosts[0].title}\n**Hourly**: ${jobPosts[0].hourly}\n\n**Description**: ${jobPosts[0].description}\n\n**Link**: ${jobPosts[0].link}`
-          );
-        });
-      } else {
-        console.log(
-          "No new job posts, waiting 60 seconds before checking again."
-        );
-      }
+      console.log("No new jobs found.");
     }
-    previous_content = new_content;
-    new_content = [];
   }
-  setInterval(scrape, 6000);
+
+  setInterval(scrapeJobAds, 300000);
 });
 
 //Discord bot token.
-client.login("Insert token here.");
+client.login("TOKEN");
+
+// WIP
+// if (previous_content.length == 0) {
+//   previous_content = new_content;
+// } else {
+//   if (!compareResults) {
+//     client.users.fetch("181195607887708161", false).then((user) => {
+//       user.send(
+//         `------------------------\n*New job post found!*\n\n**Title**: ${jobPosts[0].title}\n**Hourly**: ${jobPosts[0].hourly}\n\n**Description**: ${jobPosts[0].description}\n\n**Link**: ${jobPosts[0].link}`
+//       );
+//     });
+//   } else {
+//     console.log("No new job posts found. Waiting 5 minutes.");
+//   }
+//   console.log("Previous content: ", previous_content[0].title);
+//   console.log("New content: ", new_content[0].title);
+// }
