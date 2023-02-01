@@ -6,11 +6,13 @@ const client = new Client({
 const fs = require("fs").promises;
 const puppeteer = require("puppeteer");
 
+//Initiate Discord bot.
 client.on("ready", async () => {
   console.log("I am ready!");
 
   let previousJobPost = null;
 
+  //Function to check for new job posts.
   async function scrapeJobAds() {
     const browser = await puppeteer.launch({ headless: true });
     const page = await browser.newPage();
@@ -18,7 +20,7 @@ client.on("ready", async () => {
       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.75 Safari/537.36"
     );
 
-    //load cookies
+    //Load cookies.
     const cookiesString = await fs.readFile("./cookies.json");
     const cookies = JSON.parse(cookiesString);
     await page.setCookie(...cookies);
@@ -46,6 +48,9 @@ client.on("ready", async () => {
 
     await browser.close();
 
+    //Logic to see how old are the first three posts.
+    //UpWork has a thing where first one or two posts are sponsored.
+    //And as such are not the latest post.
     function convertToMinutes(post) {
       const timeUnits = {
         minutes: 1,
@@ -75,32 +80,20 @@ client.on("ready", async () => {
       console.log("previousJobPost is null, adding newJobPost");
       previousJobPost = newJobPost.title;
     } else if (previousJobPost !== newJobPost.title) {
-      console.log("New job found:", newJobPost.title);
+      client.users.fetch("181195607887708161", false).then((user) => {
+               user.send(
+                 `------------------------\n*New job post found!*\n\n**Title**: ${jobPosts[0].title}\n**Hourly**: ${jobPosts[0].hourly}\n\n**Description**: ${jobPosts[0].description}\n\n**Link**: ${jobPosts[0].link}`
+               );
+             });
       previousJobPost = newJobPost.title;
     } else {
       console.log("No new jobs found.");
     }
   }
 
+  //Run the scraper every 5 minutes.
   setInterval(scrapeJobAds, 300000);
 });
 
 //Discord bot token.
 client.login("TOKEN");
-
-// WIP
-// if (previous_content.length == 0) {
-//   previous_content = new_content;
-// } else {
-//   if (!compareResults) {
-//     client.users.fetch("181195607887708161", false).then((user) => {
-//       user.send(
-//         `------------------------\n*New job post found!*\n\n**Title**: ${jobPosts[0].title}\n**Hourly**: ${jobPosts[0].hourly}\n\n**Description**: ${jobPosts[0].description}\n\n**Link**: ${jobPosts[0].link}`
-//       );
-//     });
-//   } else {
-//     console.log("No new job posts found. Waiting 5 minutes.");
-//   }
-//   console.log("Previous content: ", previous_content[0].title);
-//   console.log("New content: ", new_content[0].title);
-// }
